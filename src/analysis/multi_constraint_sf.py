@@ -112,40 +112,89 @@ def analyze_results(results):
    return pd.DataFrame(summary).T
 
 
-# Example usage
+def parse_rtbm_data(lmp_file_path, binding_constraints_file_path):
+    """
+    Parse RTBM LMP and Binding Constraints data files
+    
+    Parameters:
+    - lmp_file_path: Path to the RTBM LMP CSV file
+    - binding_constraints_file_path: Path to the RTBM Binding Constraints CSV file
+    
+    Returns:
+    - mcc_data: Dictionary with MCC data
+    - shadow_prices_data: Dictionary with shadow prices data
+    """
+    # Read LMP data
+    lmp_df = pd.read_csv(lmp_file_path)
+    
+    # Extract interval and settlement location data
+    interval = lmp_df.iloc[0]['Interval']  # Get first interval
+    
+    # MCC is the third-to-last column (LMP components are in fixed positions)
+    mcc_data = {
+        'Interval': [],
+        'Settlement_Location': [],
+        'MCC': []
+    }
+    
+    for _, row in lmp_df.iterrows():
+        # Split row into columns and extract values
+        cols = list(row)
+        if len(cols) >= 4:  # Ensure we have enough columns
+            mcc_data['Interval'].append(interval)
+            mcc_data['Settlement_Location'].append(cols[2])  # Settlement Location is 3rd column
+            mcc_data['MCC'].append(float(cols[-2]))  # MCC is second-to-last column
+    
+    # Read binding constraints data
+    bc_df = pd.read_csv(binding_constraints_file_path)
+    
+    # Extract shadow prices for binding constraints
+    shadow_prices_data = {
+        'Interval': [],
+        'Constraint_Name': [],
+        'Shadow_Price': []
+    }
+    
+    for _, row in bc_df.iterrows():
+        if row['State'] == 'BINDING':  # Only include binding constraints
+            shadow_prices_data['Interval'].append(interval)
+            shadow_prices_data['Constraint_Name'].append(row['Constraint Name'])
+            shadow_prices_data['Shadow_Price'].append(float(row['Shadow Price']))
+    
+    return mcc_data, shadow_prices_data
+
+
 def main():
-   # Sample data
-   mcc_data = {
-       'Interval': [1, 1, 1, 1],
-       'Settlement_Location': ['Node1', 'Node2', 'Node3', 'Node4'],
-       'MCC': [10.5, -5.2, 8.7, -3.1]
-   }
-  
-   shadow_prices_data = {
-       'Interval': [1, 1, 1],
-       'Constraint_Name': ['Constraint1', 'Constraint2', 'Constraint3'],
-       'Shadow_Price': [15.0, 8.0, 12.0]
-   }
-  
-   mcc_df = pd.DataFrame(mcc_data)
-   shadow_prices_df = pd.DataFrame(shadow_prices_data)
-  
-   # Calculate shift factors
-   results = calculate_shift_factors_multiple_constraints(mcc_df, shadow_prices_df)
-  
-   # Analyze results
-   summary = analyze_results(results)
-  
-   # Print results
-   print("\nShift Factor Summary:")
-   print(summary)
-  
-   # Print detailed results for first interval
-   print("\nDetailed Results for Interval 1:")
-   for node, sfs in results[1]['shift_factors'].items():
-       print(f"\n{node}:")
-       for constraint, sf in sfs.items():
-           print(f"  {constraint}: {sf:.4f}")
+    # Parse data from CSV files
+    mcc_data, shadow_prices_data = parse_rtbm_data(
+        'src/data/RTBM-LMP-SL-202501230225.csv',
+        'src/data/RTBM-BC-202501230225.csv'
+    )
+    
+    # Convert to DataFrames
+    mcc_df = pd.DataFrame(mcc_data)
+    shadow_prices_df = pd.DataFrame(shadow_prices_data)
+    
+    # Calculate shift factors
+    results = calculate_shift_factors_multiple_constraints(mcc_df, shadow_prices_df)
+    
+    # Analyze results
+    summary = analyze_results(results)
+    
+    # Print results
+    print("\nShift Factor Summary:")
+    print(summary)
+    
+    # Print detailed results for first interval
+    if results:  # Check if we have any results
+        first_interval = list(results.keys())[0]  # Get the first interval key
+        print(f"\nDetailed Results for Interval {first_interval}:")
+        for node, sfs in results[first_interval]['shift_factors'].items():
+            print(f"\n{node}:")
+            for constraint, sf in sfs.items():
+                print(f"  {constraint}: {sf:.4f}")
+    else:
+        print("\nNo results found.")
 
 
 if __name__ == "__main__":
