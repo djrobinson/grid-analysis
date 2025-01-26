@@ -178,21 +178,33 @@ def main():
     # Calculate shift factors
     results = calculate_shift_factors_multiple_constraints(mcc_df, shadow_prices_df)
     
-    # Analyze results
-    summary = analyze_results(results)
+    # Create a list to store all shift factor data
+    shift_factor_data = []
     
-    # Print results
-    print("\nShift Factor Summary:")
-    print(summary)
-    
-    # Print detailed results for first interval
-    if results:  # Check if we have any results
-        first_interval = list(results.keys())[0]  # Get the first interval key
-        print(f"\nDetailed Results for Interval {first_interval}:")
-        for node, sfs in results[first_interval]['shift_factors'].items():
-            print(f"\n{node}:")
+    # Collect data for CSV
+    for interval, data in results.items():
+        for node, sfs in data['shift_factors'].items():
             for constraint, sf in sfs.items():
-                print(f"  {constraint}: {sf:.4f}")
+                shift_factor_data.append({
+                    'Interval': interval,
+                    'Node': node,
+                    'Constraint': constraint,
+                    'Shift_Factor': sf
+                })
+    
+    # Convert to DataFrame and save as CSV
+    if shift_factor_data:
+        sf_df = pd.DataFrame(shift_factor_data)
+        csv_filename = 'shift_factors_output.csv'
+        sf_df.to_csv(csv_filename, index=False)
+        print(f"\nShift factors saved to {csv_filename}")
+        
+        # Analyze results
+        summary = analyze_results(results)
+        
+        # Also print summary statistics
+        print("\nShift Factor Summary:")
+        print(summary)
     else:
         print("\nNo results found.")
 
