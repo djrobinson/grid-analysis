@@ -139,17 +139,10 @@ class GridProcessor:
         
         # First pass: collect all unique points
         for line in self.lines:
-            # Skip lines with invalid voltages
-            if not self.is_valid_voltage(line['voltage'], line['voltclass']):
-                continue
                 
             start = tuple(line['coords'][0])
             end = tuple(line['coords'][-1])
             
-            # Skip endpoints at boundary
-            if (is_at_boundary(start[1], start[0]) or 
-                is_at_boundary(end[1], end[0])):
-                continue
             
             # Find existing close points or add new ones
             start = find_matching_point(start, unique_points)
@@ -279,13 +272,16 @@ class GridProcessor:
 
     def save_results(self):
         """Save results to CSV files."""
-        # Define voltage buckets and their order
         VOLTAGE_ORDER = {
-            '500': 8,
-            '345': 7,
-            '230': 6,
-            '161': 5,
-            '138': 4,
+            '500': 12,
+            '400': 11,
+            '345': 10,
+            '250': 9,
+            '245': 8,
+            '230': 7,
+            '161': 6,
+            '138': 5,
+            '132': 4,
             '115': 3,
             '69': 2,
             '<69': 1,
@@ -297,10 +293,14 @@ class GridProcessor:
             '<69': lambda v: v > 0 and v < 69,
             '69': lambda v: v == 69,
             '115': lambda v: v == 115,
+            '132': lambda v: v == 132,
             '138': lambda v: v == 138,
             '161': lambda v: v == 161,
             '230': lambda v: v == 230,
+            '245': lambda v: v == 245,
+            '250': lambda v: v == 250,
             '345': lambda v: v == 345,
+            '400': lambda v: v == 400,
             '500': lambda v: v == 500
         }
         
