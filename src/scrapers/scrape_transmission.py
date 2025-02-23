@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 from typing import List, Dict
 import logging
-from .spp_scraper import BaseSPPScraper
+from src.scrapers.spp_scraper import BaseSPPScraper
 
 class TransmissionScraper(BaseSPPScraper):
     def __init__(self):

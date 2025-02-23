@@ -27,43 +27,12 @@ class GridProcessor:
         pass
     
     def save_results(self):
-        """Extract and save major transmission lines that connect named substations."""
+        """Extract and save transmission lines to a single CSV file."""
         if not self.data:
             raise ValueError("No data loaded. Call load_geojson() first.")
             
-        # Initialize lists to store major lines for each voltage level
-        voltage_buckets = {
-            'UNKNOWN': [],
-            '<69': [],
-            '69': [],
-            '115': [],
-            '132': [],
-            '138': [],
-            '161': [],
-            '230': [],
-            '245': [],
-            '250': [],
-            '345': [],
-            '400': [],
-            '500': []
-        }
-        
-        # Initialize buckets for unknown lines
-        unknown_voltage_buckets = {
-            'UNKNOWN': [],
-            '<69': [],
-            '69': [],
-            '115': [],
-            '132': [],
-            '138': [],
-            '161': [],
-            '230': [],
-            '245': [],
-            '250': [],
-            '345': [],
-            '400': [],
-            '500': []
-        }
+        # Initialize list to store all lines
+        all_lines = []
         
         # Process each feature
         for feature in self.data['features']:
@@ -71,8 +40,12 @@ class GridProcessor:
                 continue
             
             properties = feature['properties']
+            
+            # Get both original and corrected substation names
             sub1 = str(properties.get('sub1', ''))
             sub2 = str(properties.get('sub2', ''))
+            start_sub = str(properties.get('start_sub', ''))
+            end_sub = str(properties.get('end_sub', ''))
             
             # Prepare line data
             try:
@@ -80,71 +53,58 @@ class GridProcessor:
             except (ValueError, TypeError):
                 voltage = 0
                 
+            # Determine voltage category
+            voltage_category = 'UNKNOWN'
+            if voltage not in [-999999.0, 0.0]:
+                if voltage < 69:
+                    voltage_category = '<69'
+                else:
+                    voltage_category = str(int(voltage))
+                
+            # Determine if line has valid substations
+            has_valid_sub = (
+                self.is_valid_substation(sub1) or 
+                self.is_valid_substation(sub2) or 
+                self.is_valid_substation(start_sub) or 
+                self.is_valid_substation(end_sub)
+            )
+                
             line_data = {
                 'voltage': voltage,
+                'voltage_category': voltage_category,
                 'voltclass': properties.get('voltclass', 'UNKNOWN'),
                 'sub1': sub1,
                 'sub2': sub2,
+                'start_substation': start_sub if start_sub else None,
+                'end_substation': end_sub if end_sub else None,
                 'owner': properties.get('owner', ''),
                 'start_lon': feature['geometry']['coordinates'][0][0],
                 'start_lat': feature['geometry']['coordinates'][0][1],
                 'end_lon': feature['geometry']['coordinates'][-1][0],
                 'end_lat': feature['geometry']['coordinates'][-1][1],
                 'coordinates': json.dumps(feature['geometry']['coordinates']),
-                'quality': properties.get('quality', 'ORIGINAL')
+                'quality': properties.get('quality', 'ORIGINAL'),
+                'identified': True if has_valid_sub else False
             }
             
-            # Determine which bucket set to use
-            target_buckets = voltage_buckets if (self.is_valid_substation(sub1) or self.is_valid_substation(sub2)) else unknown_voltage_buckets
-            
-            # Determine voltage bucket
-            if voltage in [-999999.0, 0.0]:
-                target_buckets['UNKNOWN'].append(line_data)
-            elif voltage < 69:
-                target_buckets['<69'].append(line_data)
-            elif voltage == 69:
-                target_buckets['69'].append(line_data)
-            elif voltage == 115:
-                target_buckets['115'].append(line_data)
-            elif voltage == 132:
-                target_buckets['132'].append(line_data)
-            elif voltage == 138:
-                target_buckets['138'].append(line_data)
-            elif voltage == 161:
-                target_buckets['161'].append(line_data)
-            elif voltage == 230:
-                target_buckets['230'].append(line_data)
-            elif voltage == 245:
-                target_buckets['245'].append(line_data)
-            elif voltage == 250:
-                target_buckets['250'].append(line_data)
-            elif voltage == 345:
-                target_buckets['345'].append(line_data)
-            elif voltage == 400:
-                target_buckets['400'].append(line_data)
-            elif voltage == 500:
-                target_buckets['500'].append(line_data)
-            else:
-                print(f"WARNING: Unexpected voltage value: {voltage}")
+            all_lines.append(line_data)
         
-        # Save each voltage bucket to a separate CSV file
-        for voltage, lines in voltage_buckets.items():
-            if lines:  # Only create CSV if we have data for this voltage
-                df = pd.DataFrame(lines)
-                filename = f'src/data/major_lines_{voltage.replace("<", "lt")}.csv'
-                df.to_csv(filename, index=False)
-                print(f"Created {filename} with {len(lines)} lines")
-        
-        # Save each unknown voltage bucket to a separate CSV file
-        for voltage, lines in unknown_voltage_buckets.items():
-            if lines:  # Only create CSV if we have data for this voltage
-                df = pd.DataFrame(lines)
-                filename = f'src/data/unknown_lines_{voltage.replace("<", "lt")}.csv'
-                df.to_csv(filename, index=False)
-                print(f"Created {filename} with {len(lines)} lines")
+        # Save all lines to a single CSV file
+        if all_lines:
+            df = pd.DataFrame(all_lines)
+            filename = 'src/data/transmission_lines.csv'
+            df.to_csv(filename, index=False)
+            print(f"Created {filename} with {len(all_lines)} lines")
+            print(f"Known lines: {len(df[df['identified'] == True])}")
+            print(f"Unknown lines: {len(df[df['identified'] == False])}")
 
     def extract_major_lines(self):
         self.load_geojson()
         self.process_endpoints()
         self.join_continuous_lines()
         self.save_results()
+
+
+if __name__ == "__main__":
+    processor = GridProcessor('src/data/spp_only_lines_improved.geojson')
+    processor.extract_major_lines()
